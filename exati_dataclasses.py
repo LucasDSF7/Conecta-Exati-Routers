@@ -39,3 +39,13 @@ class Ocorrencia:
         Conteudo da data class
         '''
         return asdict(self).values()
+
+
+@dataclass
+class PontoServico:
+    '''
+    Representa um Ponto de Serviço da Exati.
+    '''
+    ID_PONTO_SERVICO: int = None
+    LATITUDE_TOTAL: float = None
+    LONGITUDE_TOTAL: float = None
