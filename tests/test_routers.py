@@ -20,7 +20,10 @@ def test_ids_parque_servico():
     '''
     with ExatiSession() as session:
         attributes_names = ['Bairro', 'Marco']
-        attributes = ConsultarAtributos(session=session)
-        ps = IDsParqueServico(session=session, atributos=attributes)
-        first_record = ps.export(names_attributes=attributes_names, filtros='')[0]
+        filtro = '377;4;Jabotiana|394;0;407'
+        name_to_attribute = ConsultarAtributos(session=session).name_to_records()
+        atb_ids = [(name_to_attribute[name]['ID_ATRIBUTO']) for name in attributes_names]
+        ps = IDsParqueServico(session=session)
+        first_record = ps.export(atb_ids=atb_ids, filtros=filtro)[0]
+        print(first_record.keys())
         assert 'BAIRRO' in first_record and 'MARCO' in first_record

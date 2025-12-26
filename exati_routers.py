@@ -62,16 +62,16 @@ class ConsultarAtributos():
     '''
     def __init__(self, session: ExatiSession):
         self.session = session
-        self.records: list[dict] = None
+        self.__records: list[dict] = None
 
     @property
     def records(self):
         '''
-        Assuring that property records is not None.
+        Returns private property records.
         '''
-        if self.records is None:
+        if self.__records is None:
             self.export()
-        return self.records
+        return self.__records
 
     def export(self) -> list[dict]:
         '''
@@ -82,14 +82,15 @@ class ConsultarAtributos():
             'parser': 'json'
         }
         response = self.session.ex_post(payload=payload)
-        self.records = response['RAIZ']['ATRIBUTOS']['ATRIBUTO']
+        self.__records = response['RAIZ']['ATRIBUTOS']['ATRIBUTO']
+        return self.__records
 
     def name_to_records(self, name='NOME') -> dict[str, list[dict]]:
         '''
         Create a dict with key = name of attribute and values = records
         '''
         self.export()
-        return {atb[name]: atb for atb in self.records}
+        return {atb[name]: atb for atb in self.__records}
 
 
 class IDsParqueServico():
@@ -98,16 +99,16 @@ class IDsParqueServico():
     '''
     def __init__(self, session: ExatiSession):
         self.session = session
-        self.records = None
+        self.__records: list[dict] = None
 
     @property
     def records(self):
         '''
-        Assuring that property records is not None.
+        Returns private property records.
         '''
-        if self.records is None:
+        if self.__records is None:
             self.export()
-        return self.records
+        return self.__records
 
     def export(self, atb_ids: list[str] = None, filtros: str = '') -> list[dict]:
         '''
@@ -115,6 +116,7 @@ class IDsParqueServico():
         '''
         if atb_ids is None:
             atb_ids: list[str] = []
+        atb_ids = map(str, atb_ids)
         payload = {
             'CMD_IDS_PARQUE_SERVICO': 1,
             'CMD_COMMAND': 'ConsultarPontosServicos',
@@ -124,7 +126,8 @@ class IDsParqueServico():
             'parser': 'json'
         }
         response = self.session.ex_post(payload=payload)
-        self.records = response['RAIZ']['PONTOS_SERVICOS']['PONTO_SERVICO']
+        self.__records = response['RAIZ']['PONTOS_SERVICOS']['PONTO_SERVICO']
+        return self.__records
 
     def name_to_records(self, atb_ids: list[str] = None, filtros: str='', name='ID_PONTO_SERVICO')\
         -> dict[str, list[dict]]:
@@ -132,4 +135,4 @@ class IDsParqueServico():
         Create a dict with key = name of attribute and values = records
         '''
         self.export(atb_ids, filtros)
-        return {atb[name]: atb for atb in self.records}
+        return {atb[name]: atb for atb in self.__records}
