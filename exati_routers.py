@@ -8,6 +8,9 @@ from time import sleep
 
 import requests
 from dotenv import load_dotenv
+
+from exati_dataclasses import Ocorrencia
+
 load_dotenv()
 
 
@@ -136,3 +139,95 @@ class IDsParqueServico():
         '''
         self.export(atb_ids, filtros)
         return {atb[name]: atb for atb in self.__records}
+
+
+class PrioridadeTipoOcorrencia():
+    '''
+    Router for get info about ocorrencia priority
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.__caching = {}
+
+    def add_priority(self, ocorrencia: Ocorrencia):
+        '''
+        Add property SIGLA_PRIORIDADE_PONTO_OCORR to Ocorrencia
+        '''
+        if ocorrencia.ID_TIPO_OCORRENCIA not in self.__caching:
+            payload = {
+            'CMD_ID_TIPO_OCORRENCIA': ocorrencia.ID_TIPO_OCORRENCIA,
+            'CMD_COMMAND': 'ConsultarPrioridadeTipoOcorrencia',
+            'parser': 'json'
+            }
+            response = self.session.ex_post(payload=payload)
+            ocorrencia.SIGLA_PRIORIDADE_PONTO_OCORR = response['RAIZ']\
+                ['PRIORIDADES_TIPO_OCORRENCIA']\
+                    ['PRIORIDADE_TIPO_OCORRENCIA'][0]['SIGLA_PRIORIDADE_PONTO_OCORR']
+            self.__caching[ocorrencia.ID_TIPO_OCORRENCIA] = ocorrencia.SIGLA_PRIORIDADE_PONTO_OCORR
+        else:
+            ocorrencia.SIGLA_PRIORIDADE_PONTO_OCORR = self.__caching[ocorrencia.ID_TIPO_OCORRENCIA]
+
+
+class SalvarExcluirOcorrencia():
+    '''
+    Router for saving a new Ocorrencia in Exati API.
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+
+    def save(self, ocorrencias: list[Ocorrencia], prioridade: PrioridadeTipoOcorrencia):
+        '''
+        Create in Exati - save - Ocorrencia from a list of Ocorrencia.
+        '''
+        for ocorrencia in ocorrencias:
+            prioridade.add_priority(ocorrencia=ocorrencia)
+            payload = {
+                'CMD_ID_PONTO_SERVICO': ocorrencia.ID_PONTO_SERVICO,
+                'CMD_DATA_RECLAMACAO': ocorrencia.DATA_RECLAMACAO,
+                'CMD_HORA_RECLAMACAO': ocorrencia.HORA_RECLAMACAO,
+                'CMD_ID_TIPO_ORIGEM_OCORRENCIA': ocorrencia.ID_TIPO_ORIGEM_OCORRENCIA,
+                'CMD_ID_TIPO_OCORRENCIA': ocorrencia.ID_TIPO_OCORRENCIA,
+                'CMD_COMMAND': 'SalvarSolicitacaoPontoServico',
+                'CMD_OBS': ocorrencia.OBS,
+                'CMD_SIGLA_PRIORIDADE_PONTO_OCORR': ocorrencia.SIGLA_PRIORIDADE_PONTO_OCORR,
+                'parser': 'json',
+            }
+            response = self.session.ex_post(payload=payload)
+            self.__response_message(response, ocorrencia)
+
+    def delete(self, ocorrencias: list[Ocorrencia]):
+        '''
+        Delete in Exati Ocorrencia from a list of Ocorrencia
+        '''
+        for ocorrencia in ocorrencias:
+            for id_solicitao in ocorrencia.ID_SOLICITACAO:
+                payload = {
+                    'CMD_ID_SOLICITACAO':id_solicitao,
+                    'CMD_COMMAND': 'CancelarElaboracaoSolicitacao',
+                    'parser': 'json',
+                }
+                response = self.session.ex_post(payload=payload, depth=3)
+                payload = {
+                    'CMD_ID_SOLICITACAO':id_solicitao,
+                    'CMD_COMMAND': 'ExcluirSolicitacao',
+                    'parser': 'json',
+                }
+                response = self.session.ex_post(payload=payload, depth=3)
+            self.__response_message(response, ocorrencia)
+
+    def __response_message(self, response, ocorrencia: Ocorrencia):
+        '''
+        Adds response message to Ocorrencia object.
+        '''
+        try:
+            response = response['RAIZ']['MESSAGES']
+        except (KeyError, TypeError):
+            ocorrencia.RESULTADO = 'NOK'
+            ocorrencia.MENSAGEM = 'Erro não identificado.'
+            return
+        if response['INFORMATIONS']:
+            ocorrencia.RESULTADO = 'OK'
+            ocorrencia.MENSAGEM = response['INFORMATIONS'][- 1]
+            return
+        ocorrencia.RESULTADO = 'NOK'
+        ocorrencia.MENSAGEM = f'Erro: {response["ERRORS"][- 1]}'
