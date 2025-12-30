@@ -5,6 +5,7 @@ Exati routers and session authenticator.
 import os
 from base64 import b64encode
 from time import sleep
+from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -58,6 +59,79 @@ class ExatiSession(requests.sessions.Session):
             response = self.ex_post(payload=payload, depth=depth + 1, warnings=warnings)
         return response
 
+
+class AtendimentosPendentesRealizados():
+    '''
+    Router Atendimentos Pendentes Realizados.
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def export(self, data_inicio: str, data_final: str, status: int) -> list[dict]:
+        '''
+        Export records from API.
+        data_inicio and data_final format -> %d/%m/%Y
+        status -> 0 = Pendente. 1 = Realizado. - 1 = Todos.
+        '''
+        payload = {
+            'CMD_ID_PARQUE_SERVICO': 1,
+            'CMD_DATA_INICIO': data_inicio,
+            'CMD_DATA_CONCLUSAO': data_final,
+            'CMD_STATUS': status,
+            'CMD_COMMAND': 'ConsultarStatusAtendimentoPontoServico',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.records = response['RAIZ']['PONTOS_STATUS_ATENDIMENTO']['PONTO_STATUS_ATENDIMENTO']
+        return self.records
+
+    def name_to_records(self, data_inicio: str, data_final: str, status: int, name='ID_OCORRENCIA') -> dict[str, list[dict]]:
+        '''
+        Create a dict with key = name of attribute and values = records
+        '''
+        self.export(data_inicio, data_final, status)
+        return {atb[name]: atb for atb in self.records}
+
+
+class AtendimentoPorPontoServico():
+    '''
+    Router Atendimento por Ponto de Serviço.
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def export(self, ps: int) -> list[dict]:
+        '''
+        Export records from API.
+        ps = ID_PONTO_SERVICO.
+        first index from records is the newest record.
+        '''
+        payload = {
+            'CMD_ID_PARQUE_SERVICO': 1,
+            'CMD_ID_PONTO_SERVICO': ps,
+            'CMD_COMMAND': 'ConsultarAtendimentoPorPontoServico',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        try:
+            self.records = response['RAIZ']['ATENDIMENTOS']['ATENDIMENTO']
+        except KeyError:
+            self.records = [{}]
+        return self.records
+
+    def get_status_motivo_date(self, ps: int) -> tuple[str, str, datetime]:
+        '''
+        Return a tuple with information about status, motivo and date.
+        '''
+        record = self.export(ps)[0]
+        try:
+            return record['DESC_STATUS_ATENDIMENTO_PS'],\
+        record['DESC_MOTIVO_ATENDIMENTO_PS'],\
+        datetime.strptime(record['DATA_ATENDIMENTO'], '%d/%m/%Y')
+        except KeyError:
+            return 'Pendente', 'Pendente', datetime.strptime('01/07/2021', '%d/%m/%Y')
 
 class ConsultarAtributos():
     '''
@@ -113,17 +187,19 @@ class IDsParqueServico():
             self.export()
         return self.__records
 
-    def export(self, atb_ids: list[str] = None, filtros: str = '') -> list[dict]:
+    def export(self, atb_ids: list[str] = None, mat_ids: list[str] = None, filtros: str = '') -> list[dict]:
         '''
         Export records from API.
+        Useful attributes filters:
+        Relé type == LCU -> 21;0;409
         '''
-        if atb_ids is None:
-            atb_ids: list[str] = []
-        atb_ids = map(str, atb_ids)
+        atb_ids: list[str] = [] if atb_ids is None else map(str, atb_ids)
+        mat_ids: list[str] = [] if mat_ids is None else map(str, mat_ids)
         payload = {
             'CMD_IDS_PARQUE_SERVICO': 1,
             'CMD_COMMAND': 'ConsultarPontosServicos',
             'CMD_SEM_PAGINACAO': 0,
+            "CMD_COD_ITEM_ESTRUTURA": ','.join(mat_ids),
             'CMD_ATRIBUTOS_EXPORTACAO': ','.join(atb_ids),
             'CMD_FILTRO_ATRIBUTOS': filtros,
             'parser': 'json'
