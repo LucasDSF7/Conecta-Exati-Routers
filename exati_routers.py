@@ -5,12 +5,12 @@ Exati routers and session authenticator.
 import os
 from base64 import b64encode
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from dotenv import load_dotenv
 
-from exati_dataclasses import Ocorrencia
+from exati_dataclasses import Ocorrencia, Laudo
 
 load_dotenv()
 
@@ -86,7 +86,7 @@ class AtendimentosPendentesRealizados():
         self.records = response['RAIZ']['PONTOS_STATUS_ATENDIMENTO']['PONTO_STATUS_ATENDIMENTO']
         return self.records
 
-    def name_to_records(self, data_inicio: str, data_final: str, status: int, name='ID_OCORRENCIA') -> dict[str, list[dict]]:
+    def name_to_records(self, data_inicio: str, data_final: str, status: int, name='ID_OCORRENCIA') -> dict[str, dict]:
         '''
         Create a dict with key = name of attribute and values = records
         '''
@@ -133,6 +133,54 @@ class AtendimentoPorPontoServico():
         except KeyError:
             return 'Pendente', 'Pendente', datetime.strptime('01/07/2021', '%d/%m/%Y')
 
+
+class ConsultarAmostraLaudo():
+    '''
+    Router Consultar Amostra Laudo
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def export(self, laudo: Laudo) -> list[dict]:
+        '''
+        Export records from API.
+        '''
+        payload = {
+            'CMD_ID_LAUDO': laudo.ID_LAUDO,
+            'CMD_AGRUPADO': 0,
+            'CMD_CONSULTA_MAPA': 1,
+            'CMD_COMMAND': 'ConsultarAmostraLaudo'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.records = response['RAIZ']['AMOSTRAS_LAUDO']['AMOSTRA_LAUDO']
+        return self.records
+
+    def get_ocorrencias(self, ids_to_ocorrencia: dict[list], laudo: Laudo) -> list[Ocorrencia]:
+        '''
+        Needs dependency injection from Laudo.
+        '''
+        ocorrencias: list[Ocorrencia] = []
+        self.export(laudo=laudo)
+        for record in self.records:
+            if record['POSSUI_OCORRENCIA'] == 1:
+                ocorrencias.extend(self.__split_ocorrencia(record['ID_OCORRENCIA'].split(','), ids_to_ocorrencia))
+        return ocorrencias
+
+    def __split_ocorrencia(self, ids_ocorrencias: list[str], ids_to_ocorrencia: dict[list]):
+        '''
+        Split ocorrencia record
+        '''
+        ocorrencias: list[Ocorrencia] = []
+        for id_ocorrencia in ids_ocorrencias:
+            record: dict = ids_to_ocorrencia[int(id_ocorrencia.strip())]
+            ocorrencia = Ocorrencia()
+            for key, value in record.items():
+                setattr(ocorrencia, key, value)
+            ocorrencias.append(ocorrencia)
+        return ocorrencias
+
+
 class ConsultarAtributos():
     '''
     Router Consultar Atributos.
@@ -162,12 +210,98 @@ class ConsultarAtributos():
         self.__records = response['RAIZ']['ATRIBUTOS']['ATRIBUTO']
         return self.__records
 
-    def name_to_records(self, name='NOME') -> dict[str, list[dict]]:
+    def name_to_records(self, name='NOME') -> dict[str, dict]:
         '''
         Create a dict with key = name of attribute and values = records
         '''
         self.export()
         return {atb[name]: atb for atb in self.__records}
+
+
+class ConsultarEquipes():
+    '''
+    Router Consultar Equipes
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.__records: list[dict] = None
+
+    @property
+    def records(self):
+        '''
+        Returns private property records.
+        '''
+        if self.__records is None:
+            self.export()
+        return self.__records
+
+    def export(self) -> list[dict]:
+        '''
+        Export records from API.
+        '''
+        payload = {
+            'CMD_ATIVO': 1,
+            'CMD_IS_RELATORIO': 0,
+            'CMD_MOSTRAR_MEMBROS': 1,
+            'CMD_COMMAND': 'ConsultarEquipes',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.__records = response['RAIZ']['EQUIPES']['EQUIPE']
+        return self.__records
+
+    def name_to_records(self, name='DESC_EQUIPE') -> dict[str, dict]:
+        '''
+        Create a dict with key = name of attribute and values = records
+        DESC_EQUIPE
+        ID_EQUIPE
+        '''
+        self.export()
+        return {atb[name]: atb for atb in self.__records}
+
+
+class ConsultarLaudo():
+    '''
+    Router Consultar Laudo
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.__records: list[dict] = None
+
+    @property
+    def records(self):
+        '''
+        Returns private property records.
+        '''
+        if self.__records is None:
+            self.export()
+        return self.__records
+
+    def export(self) -> list[dict]:
+        '''
+        Export records from API.
+        '''
+        last_month = (datetime.today() - timedelta(days=30)).strftime('%d/%m/%Y')
+        payload = {
+            'CMD_ID_PARQUE_SERVICO': 1,
+            'CMD_DATA_CRIACAO_INICIAL': last_month,
+            'CMD_COMMAND': 'ConsultarLaudo',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.__records = response['RAIZ']['LAUDOS']['LAUDO']
+        return self.__records
+
+    def filter(self, **kwargs) -> list[dict]:
+        '''
+        Return dicts that match filters in kwargs.
+        kwargs pattern must be key -> tuple. Tuple contains constraints
+        for the key.
+        Ex.: ID_TIPO_LAUDO: (5,)
+        Ex.: ELABORADO: (1,)
+        '''
+        self.export()
+        return [atb for atb in self.__records if all(atb[key] in values for key, values in kwargs.items())]
 
 
 class IDsParqueServico():
@@ -209,7 +343,7 @@ class IDsParqueServico():
         return self.__records
 
     def name_to_records(self, atb_ids: list[str] = None, filtros: str='', name='ID_PONTO_SERVICO')\
-        -> dict[str, list[dict]]:
+        -> dict[str, dict]:
         '''
         Create a dict with key = name of attribute and values = records
         '''
@@ -307,3 +441,41 @@ class SalvarExcluirOcorrencia():
             return
         ocorrencia.RESULTADO = 'NOK'
         ocorrencia.MENSAGEM = f'Erro: {response["ERRORS"][- 1]}'
+
+
+class TipoOcorrencia():
+    '''
+    Router Tipo Ocorrencia.
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.__records: list[dict] = None
+
+    @property
+    def records(self):
+        '''
+        Returns private property records.
+        '''
+        if self.__records is None:
+            self.export()
+        return self.__records
+
+    def export(self) -> list[dict]:
+        '''
+        Export records from API.
+        '''
+        payload = {
+            'CMD_ID_PARQUE_SERVICO': 1,
+            'CMD_COMMAND': 'ConsultarTipoOcorrencia',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.__records = response['RAIZ']['TIPOS_OCORRENCIA']['TIPO_OCORRENCIA']
+        return self.__records
+
+    def name_to_records(self, name='DESC_TIPO_OCORRENCIA') -> dict[str, dict]:
+        '''
+        Create a dict with key = name of attribute and values = records
+        '''
+        self.export()
+        return {atb[name]: atb for atb in self.__records}

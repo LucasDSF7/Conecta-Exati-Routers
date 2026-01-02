@@ -6,6 +6,7 @@ Property names are igual to those in API responses, making easer to
 
 from dataclasses import dataclass, asdict
 
+
 @dataclass
 class Ocorrencia:
     '''
@@ -39,6 +40,26 @@ class Ocorrencia:
         Conteudo da data class
         '''
         return asdict(self).values()
+
+
+@dataclass
+class Laudo:
+    '''
+    Informações de Laudo da Avaliação Técnica
+    '''
+    DATA: str = None
+    ID_LAUDO: int = None
+    DESC_LAUDO: str = None
+    ID_TIPO_LAUDO: int = None
+    DESC_TIPO_LAUDO: str = None
+    NUM_AMOSTRAS: int = None
+    AVALIADAS: int = None
+    ID_EQUIPE: int = None
+    DESC_EQUIPE: str = None
+    OCORRENCIAS: list[Ocorrencia] = None
+    NUM_OCORRENCIAS: int = None
+    RESULTADO: str = None
+    MENSAGEM: str = None
 
 
 @dataclass

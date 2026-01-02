@@ -5,7 +5,7 @@ Tests class ConsultarAtributo
 from datetime import datetime, timedelta
 
 from exati_routers import ExatiSession, ConsultarAtributos, IDsParqueServico, AtendimentosPendentesRealizados
-from exati_routers import AtendimentoPorPontoServico
+from exati_routers import AtendimentoPorPontoServico, ConsultarEquipes, ConsultarLaudo
 
 
 def test_attribute_name():
@@ -62,3 +62,25 @@ def test_atendimento_por_ponto_servico():
         atendimento_ps = AtendimentoPorPontoServico(session=session)
         result = atendimento_ps.get_status_motivo_date(ps=68582)
         assert isinstance(result[- 1], datetime)
+
+
+def test_consultar_equipes():
+    '''
+    Testing router Consultar Equipes
+    '''
+    with ExatiSession() as session:
+        equipes = ConsultarEquipes(session=session)
+        records = equipes.name_to_records()
+        print(records.keys())
+        assert 'Validação Lucas' in records
+
+
+def test_consultar_laudo():
+    '''
+    Testing router Consultar Laudo
+    '''
+    with ExatiSession() as session:
+        laudos = ConsultarLaudo(session=session)
+        records = laudos.filter(ID_TIPO_LAUDO=(5, 7), ELABORADO=(1,))
+        print([(atb['ID_TIPO_LAUDO'], atb['ELABORADO']) for atb in records])
+        assert 'ID_LAUDO' in records[0]
