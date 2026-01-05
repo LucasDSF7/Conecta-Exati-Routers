@@ -150,7 +150,8 @@ class ConsultarAmostraLaudo():
             'CMD_ID_LAUDO': laudo.ID_LAUDO,
             'CMD_AGRUPADO': 0,
             'CMD_CONSULTA_MAPA': 1,
-            'CMD_COMMAND': 'ConsultarAmostraLaudo'
+            'CMD_COMMAND': 'ConsultarAmostraLaudo',
+            'parser': 'json'
         }
         response = self.session.ex_post(payload=payload)
         self.records = response['RAIZ']['AMOSTRAS_LAUDO']['AMOSTRA_LAUDO']
@@ -173,10 +174,11 @@ class ConsultarAmostraLaudo():
         '''
         ocorrencias: list[Ocorrencia] = []
         for id_ocorrencia in ids_ocorrencias:
-            record: dict = ids_to_ocorrencia[int(id_ocorrencia.strip())]
+            record: dict = ids_to_ocorrencia.get(int(id_ocorrencia.strip()), {})
             ocorrencia = Ocorrencia()
-            for key, value in record.items():
-                setattr(ocorrencia, key, value)
+            ocorrencia.ID_PONTO_SERVICO = record.get('ID_PONTO_SERVICO')
+            ocorrencia.ID_OCORRENCIA = record.get('ID_OCORRENCIA', id_ocorrencia)
+            ocorrencia.DESC_TIPO_OCORRENCIA = record.get('DESC_TIPO_OCORRENCIA')
             ocorrencias.append(ocorrencia)
         return ocorrencias
 
@@ -277,9 +279,14 @@ class ConsultarLaudo():
             self.export()
         return self.__records
 
-    def export(self) -> list[dict]:
+    def export(self, **kwargs) -> list[dict]:
         '''
         Export records from API.
+        Return dicts that match filters in kwargs.
+        kwargs pattern must be key -> tuple. Tuple contains constraints
+        for the key.
+        Ex.: ID_TIPO_LAUDO: (5,)
+        Ex.: ELABORADO: (1,)
         '''
         last_month = (datetime.today() - timedelta(days=30)).strftime('%d/%m/%Y')
         payload = {
@@ -289,19 +296,9 @@ class ConsultarLaudo():
             'parser': 'json'
         }
         response = self.session.ex_post(payload=payload)
-        self.__records = response['RAIZ']['LAUDOS']['LAUDO']
+        response = response['RAIZ']['LAUDOS']['LAUDO']
+        self.__records = [atb for atb in response if all(atb[key] in values for key, values in kwargs.items())]
         return self.__records
-
-    def filter(self, **kwargs) -> list[dict]:
-        '''
-        Return dicts that match filters in kwargs.
-        kwargs pattern must be key -> tuple. Tuple contains constraints
-        for the key.
-        Ex.: ID_TIPO_LAUDO: (5,)
-        Ex.: ELABORADO: (1,)
-        '''
-        self.export()
-        return [atb for atb in self.__records if all(atb[key] in values for key, values in kwargs.items())]
 
 
 class IDsParqueServico():
