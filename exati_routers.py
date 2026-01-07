@@ -318,19 +318,18 @@ class IDsParqueServico():
             self.export()
         return self.__records
 
-    def export(self, atb_ids: list[str] = None, mat_ids: list[str] = None, filtros: str = '') -> list[dict]:
+    def export(self, atb_ids: list[str] = None, mat_id: str = '', filtros: str = '') -> list[dict]:
         '''
         Export records from API.
         Useful attributes filters:
         Relé type == LCU -> 21;0;409
         '''
         atb_ids: list[str] = [] if atb_ids is None else map(str, atb_ids)
-        mat_ids: list[str] = [] if mat_ids is None else map(str, mat_ids)
         payload = {
             'CMD_IDS_PARQUE_SERVICO': 1,
             'CMD_COMMAND': 'ConsultarPontosServicos',
             'CMD_SEM_PAGINACAO': 0,
-            "CMD_COD_ITEM_ESTRUTURA": ','.join(mat_ids),
+            "CMD_ID_ITEM": mat_id,
             'CMD_ATRIBUTOS_EXPORTACAO': ','.join(atb_ids),
             'CMD_FILTRO_ATRIBUTOS': filtros,
             'parser': 'json'
@@ -387,6 +386,8 @@ class SalvarExcluirOcorrencia():
         Create in Exati - save - Ocorrencia from a list of Ocorrencia.
         '''
         for ocorrencia in ocorrencias:
+            if self.__check_invalid_ocorrencia_propertys(ocorrencia):
+                continue
             prioridade.add_priority(ocorrencia=ocorrencia)
             payload = {
                 'CMD_ID_PONTO_SERVICO': ocorrencia.ID_PONTO_SERVICO,
@@ -407,20 +408,76 @@ class SalvarExcluirOcorrencia():
         Delete in Exati Ocorrencia from a list of Ocorrencia
         '''
         for ocorrencia in ocorrencias:
+            if self.__check_reopen(ocorrencia) or self.__check_reprogramacao(ocorrencia):
+                continue
             for id_solicitao in ocorrencia.ID_SOLICITACAO:
                 payload = {
                     'CMD_ID_SOLICITACAO':id_solicitao,
                     'CMD_COMMAND': 'CancelarElaboracaoSolicitacao',
                     'parser': 'json',
                 }
-                response = self.session.ex_post(payload=payload, depth=3)
+                response = self.session.ex_post(payload=payload)
                 payload = {
                     'CMD_ID_SOLICITACAO':id_solicitao,
                     'CMD_COMMAND': 'ExcluirSolicitacao',
                     'parser': 'json',
                 }
-                response = self.session.ex_post(payload=payload, depth=3)
+                response = self.session.ex_post(payload=payload)
             self.__response_message(response, ocorrencia)
+
+    def __check_invalid_ocorrencia_propertys(self, ocorrencia: Ocorrencia) -> bool:
+        '''
+        Check Ocorrencia propertys to asserty corret api call
+        '''
+        ocorrencia.OBS = '' if ocorrencia.OBS is None else ocorrencia.OBS
+        if ocorrencia.DATA_RECLAMACAO is None or ocorrencia.HORA_RECLAMACAO is None:
+            ocorrencia.MENSAGEM = 'Necessário preencher data e hora para criar ocorrência.'
+            ocorrencia.RESULTADO = 'NOK'
+            return True
+        if ocorrencia.ID_PONTO_SERVICO is None:
+            ocorrencia.MENSAGEM = 'Necessário fornecer ID do ponto de serviço.'
+            ocorrencia.RESULTADO = 'NOK'
+            return True
+        if ocorrencia.ID_TIPO_OCORRENCIA is None or ocorrencia.ID_TIPO_ORIGEM_OCORRENCIA is None:
+            ocorrencia.MENSAGEM = 'Necessário preencher qual o tipo e origem da ocorrência.'
+            ocorrencia.RESULTADO = 'NOK'
+            return True
+        return False
+
+    def __check_reopen(self, ocorrencia: Ocorrencia) -> bool:
+        '''
+        Checks if a Ocorrencia has "impossibilidade".
+        '''
+        for id_solicitao in ocorrencia.ID_SOLICITACAO:
+            payload = {
+                'CMD_ID_SOLICITACAO':id_solicitao,
+                'CMD_COMMAND': 'ConsultarDetalhesSolicitacao',
+                'parser': 'json',
+            }
+            response = self.session.ex_post(payload=payload)
+            num_reopen = response['RAIZ']['SOLICITACAO'].get('POSSUI_ATENDIMENTO_ANTERIOR', 0)
+            if int(num_reopen) >= 1:
+                ocorrencia.MENSAGEM = 'Solicitação possui reabertura. Não foi possível excluir.'
+                ocorrencia.RESULTADO = 'NOK'
+                return True
+        return False
+
+    def __check_reprogramacao(self, ocorrencia: Ocorrencia) -> bool:
+        '''
+        Checks if a Ocorrencia has "reprogramação".
+        '''
+        payload = {
+            'CMD_ID_SOLICITACAO':ocorrencia.ID_OCORRENCIA,
+            'CMD_COMMAND': 'ConsultarPontosServicoOcorrenciaNovo',
+            'parser': 'json',
+        }
+        response = self.session.ex_post(payload=payload)
+        record = response['RAIZ']['PONTOS_SERVICOS_OCORRENCIA']['PONTO_SERVICO_OCORRENCIA'][0]
+        if 'ID_REPROGRAMACAO_ATUAL' in record:
+            ocorrencia.MENSAGEM = 'Ocorrência possui reabertura. Não foi possível excluir.'
+            ocorrencia.RESULTADO = 'NOK'
+            return True
+        return False
 
     def __response_message(self, response, ocorrencia: Ocorrencia):
         '''

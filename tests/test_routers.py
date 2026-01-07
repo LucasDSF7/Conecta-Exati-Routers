@@ -81,6 +81,6 @@ def test_consultar_laudo():
     '''
     with ExatiSession() as session:
         laudos = ConsultarLaudo(session=session)
-        records = laudos.filter(ID_TIPO_LAUDO=(5, 7), ELABORADO=(1,))
+        records = laudos.export(ID_TIPO_LAUDO=(5, 7), ELABORADO=(1,))
         print([(atb['ID_TIPO_LAUDO'], atb['ELABORADO']) for atb in records])
         assert 'ID_LAUDO' in records[0]
