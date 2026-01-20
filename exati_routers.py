@@ -134,6 +134,43 @@ class AtendimentoPorPontoServico():
             return 'Pendente', 'Pendente', datetime.strptime('01/07/2021', '%d/%m/%Y')
 
 
+class AtualizarObs():
+    '''
+    Router Atualizar Observação
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def mudar(self, ocorrencia: Ocorrencia, nova_obs: str):
+        '''
+        Atualiza a obs de uma
+        '''
+        ocorrencia.OBS = nova_obs
+        payload = {
+            'CMD_ID_OCORRENCIA': ocorrencia.ID_OCORRENCIA,
+            'CMD_INDEX_OCORRENCIA_PS': 1,
+            'CMD_OBSERVACOES': ocorrencia.OBS,
+            'CMD_COMMAND': 'AtualizarObsPontoOcorrencia',
+            'parser': 'json'
+        }
+        self.session.ex_post(payload=payload)
+
+    def atualizar_reabertura(self, ocorrencia: Ocorrencia):
+        '''
+        Troca um texto {replace} para um texto novo {text_replace}.
+        '''
+        ocorrencia.OBS = ocorrencia.OBS.replace('Reabertura', f'{ocorrencia.DESC_STATUS_ATENDIMENTO_REABERTO} {ocorrencia.DESC_MOTIVO_REABERTURA}')
+        payload = {
+            'CMD_ID_OCORRENCIA': ocorrencia.ID_OCORRENCIA,
+            'CMD_INDEX_OCORRENCIA_PS': 1,
+            'CMD_OBSERVACOES': ocorrencia.OBS,
+            'CMD_COMMAND': 'AtualizarObsPontoOcorrencia',
+            'parser': 'json'
+        }
+        self.session.ex_post(payload=payload)
+
+
 class ConsultarAmostraLaudo():
     '''
     Router Consultar Amostra Laudo
@@ -299,6 +336,38 @@ class ConsultarLaudo():
         response = response['RAIZ']['LAUDOS']['LAUDO']
         self.__records = [atb for atb in response if all(atb[key] in values for key, values in kwargs.items())]
         return self.__records
+
+
+class ConsultarSolicitacao():
+    '''
+    Router Consultar Solicitacao.
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def export(self, data_inicial: datetime, id_origem: str = '', id_status: int = '') -> list[dict]:
+        '''
+        Export records from API.
+        id_status = 3 -> Pendente.
+        id_origem = 107 -> Bright City
+        '''
+        payload = {
+            'CMD_IDS_PARQUE_SERVICO': 1,
+            'CMD_DATA_RECLAMACAO': data_inicial.strftime('%d/%m/%Y'),
+            'CMD_ID_STATUS_SOLICITACAO': id_status,
+            'CMD_COMMAND': 'ConsultarSolicitacao',
+            'CMD_ID_TIPO_ORIGEM_SOLICITACAO': id_origem,
+            'CMD_INCONSISTENCIA': -1,
+            'CMD_PENDENTE_APROVACAO': -1,
+            'CMD_CONSULTAR_REABERTAS': 0,
+            'CMD_SOMENTE_VINCULADOS': 0,
+            'CMD_PAGE_SIZE': 5000,
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.records = response['RAIZ']['SOLICITACOES']['SOLICITACAO']
+        return self.records
 
 
 class IDsParqueServico():
@@ -467,7 +536,7 @@ class SalvarExcluirOcorrencia():
         Checks if a Ocorrencia has "reprogramação".
         '''
         payload = {
-            'CMD_ID_SOLICITACAO':ocorrencia.ID_OCORRENCIA,
+            'CMD_ID_OCORRENCIA':ocorrencia.ID_OCORRENCIA,
             'CMD_COMMAND': 'ConsultarPontosServicoOcorrenciaNovo',
             'parser': 'json',
         }
