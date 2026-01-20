@@ -299,6 +299,41 @@ class ConsultarEquipes():
         return {atb[name]: atb for atb in self.__records}
 
 
+class ConsultarHistoricoPontoServico():
+    '''
+    Router ConsultarHistorico
+    '''
+    def __init__(self, session: ExatiSession):
+        self.session = session
+        self.records: list[dict] = None
+
+    def export(self, ps: int) -> list[dict]:
+        '''
+        Retorna records com histórico da estrutura de um ponto de serviço.
+        Ordenado da mais antiga para a mais nova.
+        '''
+        payload = {
+            'CMD_ID_PONTO_SERVICO': ps,
+            'CMD_COMMAND': 'ConsultarHistoricoVersaoPontoServico',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        self.records = response['RAIZ']['VERSOES']['VERSAO']
+        return self.records
+
+    def export_xml(self, id_estrutura: int) -> str:
+        '''
+        Returns a string with xml format
+        '''
+        payload = {
+            'CMD_ID_ESTRUTURA_PS': id_estrutura,
+            'CMD_COMMAND': 'ConsultarItensEstruturaPontoServico',
+            'parser': 'json'
+        }
+        response = self.session.ex_post(payload=payload)
+        return response['RAIZ']['ITEM_ESTRUTURA_PS']
+
+
 class ConsultarLaudo():
     '''
     Router Consultar Laudo
