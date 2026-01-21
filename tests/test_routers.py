@@ -4,8 +4,8 @@ Tests class ConsultarAtributo
 
 from datetime import datetime, timedelta
 
-from exati_routers import ExatiSession, ConsultarAtributos, IDsParqueServico, AtendimentosPendentesRealizados
-from exati_routers import AtendimentoPorPontoServico, ConsultarEquipes, ConsultarLaudo
+from exati import ExatiSession, ConsultarAtributos, IDsParqueServico, AtendimentosPendentesRealizados
+from exati import AtendimentoPorPontoServico, ConsultarEquipes, ConsultarLaudo
 
 
 def test_attribute_name():

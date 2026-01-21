@@ -6,13 +6,77 @@ import os
 from base64 import b64encode
 from time import sleep
 from datetime import datetime, timedelta
+from dataclasses import dataclass, asdict
 
 import requests
 from dotenv import load_dotenv
 
-from exati_dataclasses import Ocorrencia, Laudo
-
 load_dotenv()
+
+
+@dataclass
+class Ocorrencia:
+    '''
+    Representa uma Ocorrência do sistema da Exati.
+    '''
+    ID_PONTO_SERVICO: int = None
+    ID_SOLICITACAO: list[int] = None
+    ID_OCORRENCIA: int = None
+    INDEX_OCORRENCIA_PS: int = None
+    ID_TIPO_ORIGEM_OCORRENCIA: int = None
+    DESC_TIPO_ORIGEM_OCORRENCIA: str = None
+    ID_TIPO_OCORRENCIA: int = None
+    SIGLA_PRIORIDADE_PONTO_OCORR: str = None
+    DESC_TIPO_OCORRENCIA: str = None
+    DATA_LIMITE_ATENDIMENTO: str = None
+    HORA_LIMITE_ATENDIMENTO: str = None
+    DATA_RECLAMACAO: str = None
+    HORA_RECLAMACAO: str = None
+    OBS: str = None
+    RESULTADO: str = None
+    MENSAGEM: str = None
+
+    def header(self) -> list:
+        '''
+        Cabeçalho
+        '''
+        return asdict(self).keys()
+
+    def data(self) -> list:
+        '''
+        Conteudo da data class
+        '''
+        return asdict(self).values()
+
+
+@dataclass
+class Laudo:
+    '''
+    Informações de Laudo da Avaliação Técnica
+    '''
+    DATA: str = None
+    ID_LAUDO: int = None
+    DESC_LAUDO: str = None
+    ID_TIPO_LAUDO: int = None
+    DESC_TIPO_LAUDO: str = None
+    NUM_AMOSTRAS: int = None
+    AVALIADAS: int = None
+    ID_EQUIPE: int = None
+    DESC_EQUIPE: str = None
+    OCORRENCIAS: list[Ocorrencia] = None
+    NUM_OCORRENCIAS: int = None
+    RESULTADO: str = None
+    MENSAGEM: str = None
+
+
+@dataclass
+class PontoServico:
+    '''
+    Representa um Ponto de Serviço da Exati.
+    '''
+    ID_PONTO_SERVICO: int = None
+    LATITUDE_TOTAL: float = None
+    LONGITUDE_TOTAL: float = None
 
 
 class ExatiSession(requests.sessions.Session):
