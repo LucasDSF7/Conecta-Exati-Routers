@@ -542,6 +542,34 @@ class PrioridadeTipoOcorrencia():
             ocorrencia.SIGLA_PRIORIDADE_PONTO_OCORR = self.__caching[ocorrencia.ID_TIPO_OCORRENCIA]
 
 
+class SalvarAtributosPontosServico():
+    '''
+    Router para mudar atributos de um ponto de serviço.
+    '''
+
+    def __init__(self, session: ExatiSession):
+        self.session = session
+
+    def save(self, ps: int, atb_value: dict, id_esquema: int = 15, entidade: str = "ATRIBUTO_PONTO_SERVICO"):
+        '''
+        Salva valores de atributos em um ponto de serviço.
+        '''
+        records = self.construct_payload(ps, atb_value, id_esquema, entidade)
+        payload = {
+            'CMD_ATRIBUTOS': str(records),
+            'CMD_COMMAND': 'SalvarAtributosPontosServico',
+            'parser': 'json'
+        }
+        return self.session.ex_post(payload=payload)
+
+    def construct_payload(self, ps: int, atb_value: dict, id_esquema: int, entidade: str) -> list[dict]:
+        '''
+        Contrói records para ser usado como payload em self.save().
+        atb_value -> key = ID_ATRIBUTO, value = value_atributo.
+        '''
+        return [{"ID_PONTO_SERVICO": ps, "ID_ATRIBUTO": key, "ID_ESQUEMA_ATRIBUTOS": id_esquema, "ENTIDADE": entidade, "VALOR": value} for key, value in atb_value.items()]
+
+
 class SalvarExcluirOcorrencia():
     '''
     Router for saving a new Ocorrencia in Exati API.
